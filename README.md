@@ -5,6 +5,11 @@ Docker
 
 ## Commands to run one by one (tested in fedora 39 linux):
 
+
+```
+docker network create traefik
+```
+
 ```
 ./build.sh
 pip install --no-cache-dir faker mysql-connector-python matplotlib
