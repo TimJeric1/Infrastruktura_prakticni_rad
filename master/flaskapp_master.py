@@ -4,9 +4,29 @@ import time
 
 app = Flask(__name__)
 
+
+def create_connection():
+    while True:
+        try:
+            # Attempt to create a connection
+            master_pool = mysql.connector.pooling.MySQLConnectionPool(pool_name="master_pool", pool_size=5,
+                                                                      **dbconfig_master)
+            connection = master_pool.get_connection()
+
+            # If the connection is successful, return it
+            return connection
+
+        except mysql.connector.Error as err:
+            # Print the error (you might want to log it instead)
+            print(f"Error: {err}")
+
+            # Sleep for a short duration before retrying
+            time.sleep(1)
+
+
 # Initialize connection pool configurations for both ports
 dbconfig_master = {
-    "host": "localhost",
+    "host": "mysql_master",
     "port": 3306,
     "user": "root",
     "password": "111",
@@ -14,7 +34,7 @@ dbconfig_master = {
 }
 
 # Create connection pools for both ports
-master_pool = mysql.connector.pooling.MySQLConnectionPool(pool_name="master_pool", pool_size=5, **dbconfig_master)
+master_pool = create_connection()
 
 # Create iterators for the connection pools
 pool_cycle = iter([master_pool])
@@ -61,6 +81,11 @@ def read_users():
 
     except mysql.connector.Error as err:
         return f"Error: {err}\n"
+
+
+@app.route('/')
+def hello():
+    return "Flaskapp Master here"
 
 
 if __name__ == '__main__':

@@ -1,5 +1,20 @@
 version: '3'
+
 services:
+  traefik:
+    image: traefik:v2.5
+      # Enables the web UI and tells Traefik to listen to docker
+    command: --api.insecure=true --providers.docker
+    ports:
+        # The HTTP port
+        - "80:80"
+        # The Web UI (enabled by --api.insecure=true)
+        - "8080:8080"
+    volumes:
+        # So that Traefik can listen to the Docker events
+        - /var/run/docker.sock:/var/run/docker.sock
+
+
   mysql_master:
     image: mysql:8.0
     env_file:
@@ -12,25 +27,34 @@ services:
       - ./master/conf/mysql.conf.cnf:/etc/mysql/conf.d/mysql.conf.cnf
       - ./master/data:/var/lib/mysql
     networks:
+      - traefik
       - overlay
+    depends_on:
+      - traefik
+    labels:
+      - "traefik.http.routers.mysql_master.rule=Host(`mysql-master.example.com`)"
 
-  mysql_slave:
-    image: mysql:8.0
-    env_file:
-      - ./slave/mysql_slave.env
-    container_name: "mysql_slave"
+
+  flaskapp_master:
+    build:
+      context: ./master
+    container_name: "flaskapp_master"
     restart: "no"
     ports:
-      - 3307:3306
-    depends_on:
-      - mysql_master
-    volumes:
-      - ./slave/conf/mysql.conf.cnf:/etc/mysql/conf.d/mysql.conf.cnf
-      - ./slave/data:/var/lib/mysql
-    networks:
-      - overlay
+      - "5000"
+    labels:
+      - "traefik.http.routers.flaskapp_master.rule=Host(`flaskapp-master.example.com`)"
+      - "traefik.http.services.flaskapp_master.loadbalancer.server.port=5000"
 
+    networks:
+      - traefik
+      - overlay
+    depends_on:
+      - traefik
+      - mysql_master
 
 
 networks:
+  traefik:
+    external: true
   overlay:
