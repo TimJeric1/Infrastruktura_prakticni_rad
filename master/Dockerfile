@@ -1,17 +1,10 @@
-# Use an official Python runtime as a parent image
 FROM python:3.10
 
-# Set the working directory to /app
+RUN mkdir /app
+COPY . /app
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+RUN pip install -r requirements.txt
+ENV FLASK_APP flaskapp_master.py
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --trusted-host pypi.python.org -r requirements.txt
-
-# Make port 5000 available to the world outside this container
-EXPOSE 5000
-
-# Run flaskapp_master.py when the container launches
-CMD ["python", "flaskapp_master.py"]
+CMD ["flask", "run", "--host", "0.0.0.0", "--port", "5000", "--with-threads"]

@@ -14,10 +14,12 @@ services:
       - ./master/conf/mysql.conf.cnf:/etc/mysql/conf.d/mysql.conf.cnf
       - ./master/data:/var/lib/mysql
     networks:
-      - my-network
+      - traefik
+      - overlay
+    depends_on:
+      - traefik
     labels:
       - "traefik.http.routers.mysql_master.rule=Host(`mysql-master.example.com`)"
-
 
   flaskapp_master:
     build:
@@ -33,6 +35,42 @@ services:
       - "traefik.http.routers.master.rule=Host(`master.localhost`)"
     depends_on:
       - mysql_master
+
+
+  mysql_slave:
+    image: mysql:8.0
+    env_file:
+      - ./slave/mysql_slave.env
+    container_name: "mysql_slave"
+    restart: "no"
+    ports:
+      - 3307:3306
+    depends_on:
+      - traefik
+      - mysql_master
+    volumes:
+      - ./slave/conf/mysql.conf.cnf:/etc/mysql/conf.d/mysql.conf.cnf
+      - ./slave/data:/var/lib/mysql
+    networks:
+      - traefik
+      - overlay
+    labels:
+      - "traefik.http.routers.mysql_master.rule=Host(`mysql-slave.example.com`)"
+
+  flaskapp_slave:
+    build:
+      context: ./slave
+    image: slave-service-flask
+    environment:
+      - FLASK_APP=flaskapp_slave.py
+    ports:
+      - "5001"
+    networks:
+      - my-network
+    labels:
+      - "traefik.http.routers.master.rule=Host(`slave.localhost`)"
+    depends_on:
+      - mysql_slave
 
 
   reverse-proxy:
@@ -52,7 +90,7 @@ services:
       - flaskapp_master
       - mysql_master
 
-
 networks:
   my-network:
     driver: bridge
+
