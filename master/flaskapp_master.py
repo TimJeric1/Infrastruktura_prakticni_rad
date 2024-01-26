@@ -5,87 +5,86 @@ import time
 app = Flask(__name__)
 
 
+def create_connection_pool():
+    while True:
+        try:
+            return mysql.connector.pooling.MySQLConnectionPool(
+                pool_name="master_pool", pool_size=5, **dbconfig_master
+            )
+        except mysql.connector.Error as err:
+            print(f"Error connecting to database: {err}")
+            time.sleep(1)
 
 
-# Route that performs a database read operation
-@app.route('/read-users')
-def read_users():
-    def create_connection():
-        while True:
-            try:
-                # Attempt to create a connection
-                master_pool = mysql.connector.pooling.MySQLConnectionPool(pool_name="master_pool", pool_size=5,
-                                                                          **dbconfig_master)
-                connection = master_pool.get_connection()
+def get_connection_from_pool(pool):
+    return pool.get_connection()
 
-                # If the connection is successful, return it
-                return connection
 
-            except mysql.connector.Error as err:
-                # Print the error (you might want to log it instead)
-                print(f"Error: {err}")
+dbconfig_master = {
+    "host": "mysql_master",
+    "port": 3306,
+    "user": "root",
+    "password": "111",
+    "database": "mydb",
+}
 
-                # Sleep for a short duration before retrying
-                time.sleep(1)
+# Create a new connection pool for each request
+connection_pool = create_connection_pool()
 
-    # Initialize connection pool configurations for both ports
-    dbconfig_master = {
-        "host": "mysql_master",
-        "port": 3306,
-        "user": "root",
-        "password": "111",
-        "database": "mydb"
-    }
 
-    # Create connection pools for both ports
-    master_pool = create_connection()
-
-    # Create iterators for the connection pools
-    pool_cycle = iter([master_pool])
-
-    # Function to get a connection from the pools with round-robin load balancing
-    def get_connection():
-        global pool_cycle  # Declare pool_cycle as global
-
-        while True:
-            try:
-                # Get the next available connection pool in a round-robin manner
-                pool = next(pool_cycle)
-                return pool.get_connection()
-
-            except StopIteration:  # Reset the iterator if exhausted
-                pool_cycle = iter([master_pool])
-                print("Connection pools exhausted, resetting the iterator.")
-                time.sleep(1)
-
+# Helper function to execute a SELECT query and return results as JSON
+def execute_select_query(query):
     try:
-        # Attempt to get a connection from the pools with round-robin load balancing
-        cnx = get_connection()
-
-        cursor = cnx.cursor()
-
-        # Execute your read query (replace 'your_table' and 'your_column' with appropriate names)
-        query = "SELECT * FROM users"
+        cnx = get_connection_from_pool(connection_pool)
+        cursor = cnx.cursor(dictionary=True)  # Return results as dictionaries
         cursor.execute(query)
-
-        # PROCESSING
-        time.sleep(0.5)
-
         data = cursor.fetchall()
-
         cursor.close()
         cnx.close()
-
-        return jsonify(data)
-
+        return data
     except mysql.connector.Error as err:
-        return f"Error: {err}\n"
+        return {"error": f"Database Error: {err}"}
 
 
-@app.route('/')
+# API endpoint to read data from the 'cart' table
+@app.route("/api/read-cart")
+def read_cart():
+    query = "SELECT * FROM cart"
+    return jsonify(execute_select_query(query))
+
+
+# API endpoint to read data from the 'categories' table
+@app.route("/api/read-categories")
+def read_categories():
+    query = "SELECT * FROM categories"
+    return jsonify(execute_select_query(query))
+
+
+# API endpoint to read data from the 'orders' table
+@app.route("/api/read-orders")
+def read_orders():
+    query = "SELECT * FROM orders"
+    return jsonify(execute_select_query(query))
+
+
+# API endpoint to read data from the 'products' table
+@app.route("/api/read-products")
+def read_products():
+    query = "SELECT * FROM products"
+    return jsonify(execute_select_query(query))
+
+
+# API endpoint to read data from the 'users' table
+@app.route("/api/read-users")
+def read_users():
+    query = "SELECT * FROM users"
+    return jsonify(execute_select_query(query))
+
+
+@app.route("/api/")
 def hello():
     return "Flaskapp Master here"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)

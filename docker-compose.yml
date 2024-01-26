@@ -30,10 +30,45 @@ services:
     networks:
       - my-network
     labels:
-      - "traefik.http.routers.master.rule=Host(`master.localhost`)"
+      - "traefik.http.routers.master.rule=Host(`master.localhost`) && PathPrefix(`/api`)"
     depends_on:
       - mysql_master
 
+  express-app:
+    build:
+      context: ./express-app
+    restart: "no"
+    image: "express-app"
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    labels:
+      - "traefik.http.routers.express-app.rule=Host(`dujetim.test`) && PathPrefix(`/express`)"
+    depends_on:
+      - flaskapp_master
+      - mysql_master
+    networks:
+      - my-network
+    
+
+  sport-store:
+    build:
+      context: ./sport-store
+    image: "sport-store"
+    expose:
+      - "5173"
+    ports:
+      - "5173:5173"
+    labels:
+      - "traefik.http.routers.sport-store.rule=Host(`dujetim.test`) && PathPrefix(`/vue`)"
+    volumes:
+      - ./sport-store:/app
+      - /app/node_modules
+    depends_on:
+      - express-app
+    networks:
+      - my-network
 
   reverse-proxy:
     image: traefik:v2.10
