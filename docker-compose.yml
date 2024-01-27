@@ -2,6 +2,20 @@ version: '3'
 
 services:
 
+
+  redis:
+    container_name: redis
+    image: 'redislabs/redismod:latest'
+    ports:
+      - 6379:6379
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - my-network
+
+
   mysql_master:
     image: mysql:8.0
     env_file:
@@ -30,7 +44,7 @@ services:
     networks:
       - my-network
     labels:
-      - "traefik.http.routers.master.rule=Host(`master.localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.master.rule=Host(`master.localhost`)"
     depends_on:
       - mysql_master
 
