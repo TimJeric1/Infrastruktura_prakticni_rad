@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import mysql.connector.pooling
 import time
 
@@ -45,19 +45,17 @@ def execute_select_query(query):
     except mysql.connector.Error as err:
         return {"error": f"Database Error: {err}"}
 
+def execute_query(query, values=None):
+    try:
+        cnx = get_connection_from_pool(connection_pool)
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(query, values)
+        cnx.commit()
+        cursor.close()
+        cnx.close()
+    except mysql.connector.Error as err:
+        raise Exception(f"Database Error: {err}")
 
-# API endpoint to read data from the 'cart' table
-@app.route("/api/read-cart")
-def read_cart():
-    query = "SELECT * FROM cart"
-    return jsonify(execute_select_query(query))
-
-
-# API endpoint to read data from the 'categories' table
-@app.route("/api/read-categories")
-def read_categories():
-    query = "SELECT * FROM categories"
-    return jsonify(execute_select_query(query))
 
 
 # API endpoint to read data from the 'orders' table
@@ -81,9 +79,70 @@ def read_users():
     return jsonify(execute_select_query(query))
 
 
+# API endpoint to read data from the 'order_items' table
+@app.route("/api/read-order-items")
+def read_order_items():
+    query = "SELECT * FROM order_items"
+    return jsonify(execute_select_query(query))
+
+
 @app.route("/api/")
 def hello():
     return "Flaskapp Master here"
+
+
+
+
+# API endpoint for user login
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.json
+    email = data.get("email")
+    password = data.get("password")
+
+    if email and password:
+        query = f"SELECT * FROM users WHERE email = '{email}' AND password = '{password}'"
+        result = execute_select_query(query)
+
+        if result:
+            # Assuming 'result' is a dictionary containing user information
+            user_info = result[0]  # Assuming there's only one user with the given email and password
+            return jsonify({"status": "success", "message": "Login successful", "user": user_info})
+        else:
+            return jsonify({"status": "error", "message": "Invalid email or password"})
+
+    return jsonify({"status": "error", "message": "Invalid request"})
+
+
+# API endpoint for user register
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.json
+    name = data.get("name")
+    email = data.get("email")
+    password = data.get("password")
+
+    if name and email and password:
+
+        # Check if the user with the given email already exists
+        check_query = f"SELECT * FROM users WHERE email = '{email}'"
+        existing_user = execute_select_query(check_query)
+
+        if existing_user:
+            return jsonify({"status": "error", "message": "User with this email already exists"})
+
+        # Insert the new user into the 'users' table
+        insert_query = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
+        insert_values = (name, email, password)
+        execute_query(insert_query, insert_values)
+
+        # Retrieve the newly registered user
+        user_query = f"SELECT * FROM users WHERE email = '{email}'"
+        new_user = execute_select_query(user_query)
+
+        return jsonify({"status": "success", "message": "User registered successfully", "user": new_user[0]})
+    else:
+        return jsonify({"status": "error", "message": "Invalid request"})
 
 
 if __name__ == "__main__":
