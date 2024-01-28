@@ -41,15 +41,17 @@ mycursor.execute(
 )
 
 print("Inserting data into tables and Redis...")
-redis_client.delete("products", "orders", "users", "order_items")
+redis_client.delete("products")
+
 
 # Insert data into "products" table and store in Redis
+
 for i in range(1000):
     name = fake.word()
     description = fake.text()
     price = fake.random.uniform(10, 1000)
 
-    product_key = f"product:{i}"
+    product_key = f"product:{i+1}"
     product_mapping = {
         "name": name,
         "description": description,
@@ -60,42 +62,23 @@ for i in range(1000):
 
 
 
-# Insert data into "orders" table and store in Redis
-for i in range(5):
-    user_id = fake.random_int(1, 5)  # Make sure user_id exists in the users table
-    date_ordered = fake.date()
-    status = fake.random_element(elements=("pending", "shipped", "delivered"))
-    cost = fake.random.uniform(10, 1000)
+# Insert a specific user into the "users" table
+name = "duje"
+email = "dujevidas123@gmail.com"
+password = "DVidas123"
 
-    order_key = f"order:{i}"
-    order_mapping = {
-        "user_id": user_id,
-        "date_ordered": date_ordered,
-        "status": status,
-        "cost": cost,
-    }
-    print(f"Inserting order {i}: {order_mapping}")
-    redis_client.hset(f"_{{{order_key}}}", mapping=order_mapping)
-    redis_client.sadd("orders", order_key)
+sql = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
+val = (name, email, password)
+mycursor.execute(sql, val)
 
-# Insert data into "users" table and store in Redis
-for i in range(100):
+# Insert data into "users" table
+for _ in range(100):
     name = fake.name()
     email = fake.email()
     password = fake.password()
-
-    user_key = f"user:{i}"
-    user_mapping = {"name": name, "email": email, "password": password}
-    redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
-    redis_client.sadd("users", user_key)
-
-order_keys = sorted(redis_client.smembers("orders"))
-
-# Print the details for each order
-print("Order details:")
-for order_key in order_keys:
-    order_data = redis_client.hgetall(order_key)
-    print(f"Order Key: {order_key}, Order Data: {order_data}")
+    sql = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
+    val = (name, email, password)
+    mycursor.execute(sql, val)
 mydb.commit()
 mycursor.close()
 mydb.close()

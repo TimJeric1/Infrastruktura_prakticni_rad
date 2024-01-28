@@ -1,10 +1,10 @@
 <template>
   <div class="product-card">
-    <h3>{{ product.name }}</h3>
+    <h3>{{ product.values.name }}</h3>
     <p class="description">
-      {{ truncateDescription(product.description, 100) }}
+      {{ truncateDescription(product.values.description, 100) }}
     </p>
-    <p>Price: ${{ product.price }}</p>
+    <p>Price: ${{ product.values.price }}</p>
     <button @click="addToCart(product)">Add to Cart</button>
   </div>
 </template>

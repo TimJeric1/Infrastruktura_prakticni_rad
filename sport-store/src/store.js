@@ -27,17 +27,17 @@ export const useCartStore = defineStore('cart', {
   actions: {
     addToCart(product) {
       const existingProduct = this.cartItems.find(
-        (item) => item.id === product.product_id
+        (item) => item.id === product.key
       );
 
       if (existingProduct) {
         existingProduct.quantity += 1;
       } else {
         this.cartItems.push({
-          id: product.product_id,
-          name: product.name,
+          id: product.key,
+          name: product.values.name,
           quantity: 1,
-          price: product.price
+          price: product.values.price
         });
       }
     },

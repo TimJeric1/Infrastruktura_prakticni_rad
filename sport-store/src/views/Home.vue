@@ -24,6 +24,7 @@ onMounted(async () => {
       'http://dujetim.test/express/read-products'
     );
     products.value = response.data;
+    console.log(products.value)
   } catch (error) {
     console.error('Error fetching products:', error.message);
   }

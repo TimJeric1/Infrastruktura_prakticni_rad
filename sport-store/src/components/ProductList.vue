@@ -4,7 +4,7 @@
     <div class="product-list">
       <ProductCard
         v-for="product in products"
-        :key="product.id"
+        :key="product.key"
         :product="product"
       />
     </div>
@@ -12,8 +12,15 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue';
 import ProductCard from './ProductCard.vue';
 const props = defineProps(['products']);
+
+console.log(props.products)
+
+onMounted(()=>{
+  console.log(props.products)
+})
 </script>
 
 <style scoped>

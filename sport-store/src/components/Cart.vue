@@ -24,6 +24,7 @@ const currentUser = useUserStore().user;
 const cartItems = useCartStore().cartItems;
 const cartStore = useCartStore();
 
+
 // Computed property to calculate the total cost of items in the cart
 const total = computed(() => {
   return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -39,6 +40,7 @@ const removeItem = (productId) => {
 // Method to create an order
 const createOrder = async () => {
   try {
+    console.log(cartItems)
     const user_id = currentUser.user_id;
     const products = cartItems.map((item) => ({
       product_id: item.id,

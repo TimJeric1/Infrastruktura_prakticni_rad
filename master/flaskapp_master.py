@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 import redis
-from datetime import datetime
+import mysql.connector.pooling
+import time
 
 app = Flask(__name__)
 
@@ -11,20 +12,73 @@ redis_connection = redis.Redis(host="redis", port=6379, decode_responses=True)
 # Helper function to execute a Redis HGETALL command and return results as JSON
 def execute_hgetall_command(key):
     try:
-        values = []
+        result = []
         keys = redis_connection.smembers(name=key)
         for key in keys:
-            values.append(redis_connection.hgetall(key))
-        return values
+            values = redis_connection.hgetall(key)
+            result.append({"key": key, "values": values})
+        return result
     except redis.RedisError as err:
         return {"error": f"Redis Error: {err}"}
 
 
-# API endpoint to read data from the 'orders' table
+def create_connection_pool():
+    while True:
+        try:
+            return mysql.connector.pooling.MySQLConnectionPool(
+                pool_name="master_pool", pool_size=5, **dbconfig_master
+            )
+        except mysql.connector.Error as err:
+            print(f"Error connecting to database: {err}")
+            time.sleep(1)
+
+
+def get_connection_from_pool(pool):
+    return pool.get_connection()
+
+
+dbconfig_master = {
+    "host": "mysql_master",
+    "port": 3306,
+    "user": "root",
+    "password": "111",
+    "database": "mydb",
+}
+
+# Create a new connection pool for each request
+connection_pool = create_connection_pool()
+
+
+# Helper function to execute a SELECT query and return results as JSON
+def execute_select_query(query):
+    try:
+        cnx = get_connection_from_pool(connection_pool)
+        cursor = cnx.cursor(dictionary=True)  # Return results as dictionaries
+        cursor.execute(query)
+        data = cursor.fetchall()
+        cursor.close()
+        cnx.close()
+        return data
+    except mysql.connector.Error as err:
+        return {"error": f"Database Error: {err}"}
+
+
+def execute_query(query, values=None):
+    try:
+        cnx = get_connection_from_pool(connection_pool)
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(query, values)
+        cnx.commit()
+        cursor.close()
+        cnx.close()
+    except mysql.connector.Error as err:
+        raise Exception(f"Database Error: {err}")
+
+
 @app.route("/api/read-orders")
 def read_orders():
-    key = "orders"  # Assuming 'orders' is a Redis hash key
-    return jsonify(execute_hgetall_command(key))
+    query = "SELECT * FROM orders"
+    return jsonify(execute_select_query(query))
 
 
 # API endpoint to read data from the 'products' table
@@ -37,15 +91,15 @@ def read_products():
 # API endpoint to read data from the 'users' table
 @app.route("/api/read-users")
 def read_users():
-    key = "users"  # Assuming 'users' is a Redis hash key
-    return jsonify(execute_hgetall_command(key))
+    query = "SELECT * FROM users"
+    return jsonify(execute_select_query(query))
 
 
 # API endpoint to read data from the 'order_items' table
 @app.route("/api/read-order-items")
 def read_order_items():
-    key = "order_items"  # Assuming 'order_items' is a Redis hash key
-    return jsonify(execute_hgetall_command(key))
+    query = "SELECT * FROM order_items"
+    return jsonify(execute_select_query(query))
 
 
 @app.route("/api/")
@@ -61,26 +115,26 @@ def login():
     password = data.get("password")
 
     if email and password:
-        existing_user_keys = redis_connection.smembers("users")
-        user_data = None
+        query = (
+            f"SELECT * FROM users WHERE email = '{email}' AND password = '{password}'"
+        )
+        result = execute_select_query(query)
 
-        for user_key in existing_user_keys:
-            user_data = redis_connection.hgetall(user_key)
-            if user_data.get("email") == email and user_data.get("password") == password:
-                break
-
-        if user_data and user_data["password"] == password:
+        if result:
+            # Assuming 'result' is a dictionary containing user information
+            user_info = result[
+                0
+            ]  # Assuming there's only one user with the given email and password
             return jsonify(
-                {"status": "success", "message": "Login successful", "user": user_data}
+                {"status": "success", "message": "Login successful", "user": user_info}
             )
         else:
-            return jsonify({"status": "error", "message": "Invalid email or password", "user": user_data})
-    else:
-        return jsonify({"status": "error", "message": "Invalid request"})
+            return jsonify({"status": "error", "message": "Invalid email or password"})
+
+    return jsonify({"status": "error", "message": "Invalid request"})
 
 
-
-# API endpoint for user registration
+# API endpoint for user register
 @app.route("/api/register", methods=["POST"])
 def register():
     data = request.json
@@ -89,28 +143,31 @@ def register():
     password = data.get("password")
 
     if name and email and password:
-        # Get the count of existing users to generate the next user key
-        user_count = redis_connection.scard("users")
+        # Check if the user with the given email already exists
+        check_query = f"SELECT * FROM users WHERE email = '{email}'"
+        existing_user = execute_select_query(check_query)
 
-        user_key = f"user:{user_count + 1}"
-        user_data = redis_connection.hgetall(user_key)
-
-        if not user_data:
-            # User does not exist, proceed with registration
-            user_data = {"name": name, "email": email, "password": password}
-            redis_connection.hset(f"_{{{user_key}}}", mapping=user_data)
-            redis_connection.sadd('users', user_key)
-            return jsonify(
-                {
-                    "status": "success",
-                    "message": "User registered successfully",
-                    "user": user_data,
-                }
-            )
-        else:
+        if existing_user:
             return jsonify(
                 {"status": "error", "message": "User with this email already exists"}
             )
+
+        # Insert the new user into the 'users' table
+        insert_query = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
+        insert_values = (name, email, password)
+        execute_query(insert_query, insert_values)
+
+        # Retrieve the newly registered user
+        user_query = f"SELECT * FROM users WHERE email = '{email}'"
+        new_user = execute_select_query(user_query)
+
+        return jsonify(
+            {
+                "status": "success",
+                "message": "User registered successfully",
+                "user": new_user[0],
+            }
+        )
     else:
         return jsonify({"status": "error", "message": "Invalid request"})
 
@@ -120,49 +177,44 @@ def register():
 def create_order():
     data = request.json
     user_id = data.get("user_id")
-    products = data.get("products")  # Assuming it's a list of product IDs and quantities
+    products = data.get(
+        "products"
+    )  # Assuming it's a list of product IDs and quantities
 
     if user_id and products:
         try:
-            # Assuming 'orders' and 'order_items' are Redis hash keys
-            
-            order_count = redis_connection.scard("orders")  # Increment order count
-            order_key = f"order:{order_count+1}"
-            total_cost = sum(product["price"] * product["quantity"] for product in products)
+            # Insert the new order into the 'orders' table
+            order_query = "INSERT INTO orders (user_id, date_ordered, status, cost) VALUES (%s, NOW(), 'pending', %s)"
+            total_cost = sum(
+                product["price"] * product["quantity"] for product in products
+            )
+            order_values = (user_id, total_cost)
+            execute_query(order_query, order_values)
 
-            # Store order data in Redis
-            order_data = {
-                "user_id": user_id,
-                "date_ordered": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "pending",
-                "cost": total_cost,
-            }
-            redis_connection.hset(f"_{order_key}", mapping=order_data)
-            redis_connection.sadd('orders', order_key)
+            # Retrieve the ID of the newly created order
+            order_id_query = "SELECT * FROM orders ORDER BY order_id DESC LIMIT 1"
+            order_id_result = execute_select_query(order_id_query)
+            last_order_id = order_id_result[0]["order_id"]
 
             # Insert the order items into the 'order_items' table
             for product in products:
-                order_item_count = redis_connection.scard("order_items")  # Increment order count
-                order_item_key = f"order_items:{order_item_count+1}"
                 product_id = product["product_id"]
                 quantity = product["quantity"]
                 price = product["price"]
 
-                order_item_data = {
-                    "order_id": order_key,
-                    "product_id": product_id,
-                    "quantity": quantity,
-                    "price": price,
-                }
-                redis_connection.hset(f"_{order_item_key}", mapping=order_item_data)
-                redis_connection.sadd('order_items', order_item_key)
+                order_item_query = "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)"
+                order_item_values = (last_order_id, product_id, quantity, price)
+                execute_query(order_item_query, order_item_values)
 
-            return jsonify({"status": "success", "message": "Order created successfully","key":order_key})
+            return jsonify(
+                {"status": "success", "message": "Order created successfully"}
+            )
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)})
-    else:
-        return jsonify({"status": "error", "message": "Invalid request"})
+            return jsonify(
+                {"status": "error", "message": str(e), "my_order_id": last_order_id}
+            )
 
+    return jsonify({"status": "error", "message": "Invalid request"})
 
 
 if __name__ == "__main__":
