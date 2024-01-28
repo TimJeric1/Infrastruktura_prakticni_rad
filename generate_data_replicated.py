@@ -59,7 +59,8 @@ for i in range(1000):
         'description': description,
         'price': price
     }
-    redis_client.hset(product_key, mapping=product_mapping)
+    redis_client.hset(f"_{{{product_key}}}", mapping=product_mapping)
+    redis_client.sadd('products', product_key)
 
 # Insert a specific user into the "users" table
 name = "duje"
@@ -74,7 +75,8 @@ password = "DVidas123"
 user_index = 1
 user_key = f"user:{user_index}"
 user_mapping = {'name': name, 'email': email, 'password': password}
-redis_client.hset(user_key, mapping=user_mapping)
+redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
+redis_client.sadd('users', user_key)
 
 # Insert data into "users" table and store in Redis
 for i in range(100):
@@ -90,7 +92,15 @@ for i in range(100):
     #user_id = mycursor.lastrowid
     user_key = f"user:{i}"
     user_mapping = {'name': name, 'email': email, 'password': password}
-    redis_client.hset(user_key, mapping=user_mapping)
+    redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
+    redis_client.sadd('users', user_key)
+
+    """
+    user_key = f"user:{i}"
+    user_mapping = {'name': name, 'email': email, 'password': password}
+    redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
+    redis_client.sadd('users', user_key)
+    """
 
 mydb.commit()
 mycursor.close()
