@@ -1,6 +1,17 @@
-version: '3'
+version: "3"
 
 services:
+  redis:
+    container_name: redis
+    image: "redislabs/redismod:latest"
+    ports:
+      - 6379:6379
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - my-network
 
   mysql_master:
     image: mysql:8.0
@@ -17,7 +28,6 @@ services:
       - my-network
     labels:
       - "traefik.http.routers.mysql_master.rule=Host(`mysql-master.example.com`)"
-
 
   flaskapp_master:
     build:
@@ -50,7 +60,6 @@ services:
       - mysql_master
     networks:
       - my-network
-    
 
   sport-store:
     build:
@@ -86,7 +95,6 @@ services:
     depends_on:
       - flaskapp_master
       - mysql_master
-
 
 networks:
   my-network:

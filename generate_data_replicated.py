@@ -1,16 +1,16 @@
 from faker import Faker
-import mysql.connector
+import pymysql
 import redis
 
 fake = Faker()
 
 # Connect to MySQL
-mydb = mysql.connector.connect(
+mydb = pymysql.connect(
     host="localhost", port=3306, user="root", password="111", database="mydb"
 )
 
 # Connect to Redis
-redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
 mycursor = mydb.cursor()
 
@@ -41,6 +41,7 @@ mycursor.execute(
 )
 
 print("Inserting data into tables and Redis...")
+redis_client.delete("products", "orders", "users", "order_items")
 
 # Insert data into "products" table and store in Redis
 for i in range(1000):
@@ -48,35 +49,34 @@ for i in range(1000):
     description = fake.text()
     price = fake.random.uniform(10, 1000)
 
-    #sql = "INSERT INTO products (name, description, price) VALUES (%s, %s, %s)"
-    #val = (name, description, price)
-    #mycursor.execute(sql, val)
-
-    # Store product data in Redis
     product_key = f"product:{i}"
     product_mapping = {
-        'name': name,
-        'description': description,
-        'price': price
+        "name": name,
+        "description": description,
+        "price": price,
     }
     redis_client.hset(f"_{{{product_key}}}", mapping=product_mapping)
-    redis_client.sadd('products', product_key)
+    redis_client.sadd("products", product_key)
 
-# Insert a specific user into the "users" table
-name = "duje"
-email = "dujevidas123@gmail.com"
-password = "DVidas123"
 
-#sql = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
-#val = (name, email, password)
-#mycursor.execute(sql, val)
 
-# Store specific user data in Redis
-user_index = 1
-user_key = f"user:{user_index}"
-user_mapping = {'name': name, 'email': email, 'password': password}
-redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
-redis_client.sadd('users', user_key)
+# Insert data into "orders" table and store in Redis
+for i in range(5):
+    user_id = fake.random_int(1, 5)  # Make sure user_id exists in the users table
+    date_ordered = fake.date()
+    status = fake.random_element(elements=("pending", "shipped", "delivered"))
+    cost = fake.random.uniform(10, 1000)
+
+    order_key = f"order:{i}"
+    order_mapping = {
+        "user_id": user_id,
+        "date_ordered": date_ordered,
+        "status": status,
+        "cost": cost,
+    }
+    print(f"Inserting order {i}: {order_mapping}")
+    redis_client.hset(f"_{{{order_key}}}", mapping=order_mapping)
+    redis_client.sadd("orders", order_key)
 
 # Insert data into "users" table and store in Redis
 for i in range(100):
@@ -84,24 +84,18 @@ for i in range(100):
     email = fake.email()
     password = fake.password()
 
-    #sql = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
-    #val = (name, email, password)
-    #mycursor.execute(sql, val)
-
-    # Store user data in Redis
-    #user_id = mycursor.lastrowid
     user_key = f"user:{i}"
-    user_mapping = {'name': name, 'email': email, 'password': password}
+    user_mapping = {"name": name, "email": email, "password": password}
     redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
-    redis_client.sadd('users', user_key)
+    redis_client.sadd("users", user_key)
 
-    """
-    user_key = f"user:{i}"
-    user_mapping = {'name': name, 'email': email, 'password': password}
-    redis_client.hset(f"_{{{user_key}}}", mapping=user_mapping)
-    redis_client.sadd('users', user_key)
-    """
+order_keys = sorted(redis_client.smembers("orders"))
 
+# Print the details for each order
+print("Order details:")
+for order_key in order_keys:
+    order_data = redis_client.hgetall(order_key)
+    print(f"Order Key: {order_key}, Order Data: {order_data}")
 mydb.commit()
 mycursor.close()
 mydb.close()

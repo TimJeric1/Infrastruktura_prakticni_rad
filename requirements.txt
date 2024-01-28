@@ -1,0 +1,4 @@
+rgsync
+psycopg2-binary
+cryptography
+pymysql
