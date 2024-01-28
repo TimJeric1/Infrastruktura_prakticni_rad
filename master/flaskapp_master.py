@@ -45,6 +45,7 @@ def execute_select_query(query):
     except mysql.connector.Error as err:
         return {"error": f"Database Error: {err}"}
 
+
 def execute_query(query, values=None):
     try:
         cnx = get_connection_from_pool(connection_pool)
@@ -55,7 +56,6 @@ def execute_query(query, values=None):
         cnx.close()
     except mysql.connector.Error as err:
         raise Exception(f"Database Error: {err}")
-
 
 
 # API endpoint to read data from the 'orders' table
@@ -91,8 +91,6 @@ def hello():
     return "Flaskapp Master here"
 
 
-
-
 # API endpoint for user login
 @app.route("/api/login", methods=["POST"])
 def login():
@@ -101,13 +99,19 @@ def login():
     password = data.get("password")
 
     if email and password:
-        query = f"SELECT * FROM users WHERE email = '{email}' AND password = '{password}'"
+        query = (
+            f"SELECT * FROM users WHERE email = '{email}' AND password = '{password}'"
+        )
         result = execute_select_query(query)
 
         if result:
             # Assuming 'result' is a dictionary containing user information
-            user_info = result[0]  # Assuming there's only one user with the given email and password
-            return jsonify({"status": "success", "message": "Login successful", "user": user_info})
+            user_info = result[
+                0
+            ]  # Assuming there's only one user with the given email and password
+            return jsonify(
+                {"status": "success", "message": "Login successful", "user": user_info}
+            )
         else:
             return jsonify({"status": "error", "message": "Invalid email or password"})
 
@@ -123,13 +127,14 @@ def register():
     password = data.get("password")
 
     if name and email and password:
-
         # Check if the user with the given email already exists
         check_query = f"SELECT * FROM users WHERE email = '{email}'"
         existing_user = execute_select_query(check_query)
 
         if existing_user:
-            return jsonify({"status": "error", "message": "User with this email already exists"})
+            return jsonify(
+                {"status": "error", "message": "User with this email already exists"}
+            )
 
         # Insert the new user into the 'users' table
         insert_query = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)"
@@ -140,9 +145,60 @@ def register():
         user_query = f"SELECT * FROM users WHERE email = '{email}'"
         new_user = execute_select_query(user_query)
 
-        return jsonify({"status": "success", "message": "User registered successfully", "user": new_user[0]})
+        return jsonify(
+            {
+                "status": "success",
+                "message": "User registered successfully",
+                "user": new_user[0],
+            }
+        )
     else:
         return jsonify({"status": "error", "message": "Invalid request"})
+
+
+# API endpoint for creating a new order
+@app.route("/api/create-order", methods=["POST"])
+def create_order():
+    data = request.json
+    user_id = data.get("user_id")
+    products = data.get(
+        "products"
+    )  # Assuming it's a list of product IDs and quantities
+
+    if user_id and products:
+        try:
+            # Insert the new order into the 'orders' table
+            order_query = "INSERT INTO orders (user_id, date_ordered, status, cost) VALUES (%s, NOW(), 'pending', %s)"
+            total_cost = sum(
+                product["price"] * product["quantity"] for product in products
+            )
+            order_values = (user_id, total_cost)
+            execute_query(order_query, order_values)
+
+            # Retrieve the ID of the newly created order
+            order_id_query = "SELECT * FROM orders ORDER BY order_id DESC LIMIT 1"
+            order_id_result = execute_select_query(order_id_query)
+            last_order_id = order_id_result[0]["order_id"]
+
+            # Insert the order items into the 'order_items' table
+            for product in products:
+                product_id = product["product_id"]
+                quantity = product["quantity"]
+                price = product["price"]
+
+                order_item_query = "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)"
+                order_item_values = (last_order_id, product_id, quantity, price)
+                execute_query(order_item_query, order_item_values)
+
+            return jsonify(
+                {"status": "success", "message": "Order created successfully"}
+            )
+        except Exception as e:
+            return jsonify(
+                {"status": "error", "message": str(e), "my_order_id": last_order_id}
+            )
+
+    return jsonify({"status": "error", "message": "Invalid request"})
 
 
 if __name__ == "__main__":

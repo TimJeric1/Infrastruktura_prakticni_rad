@@ -4,10 +4,6 @@
   </div>
 </template>
 
-<script setup>
+<script setup></script>
 
-</script>
-
-<style scoped>
-/* Your styles here */
-</style>
+<style scoped></style>
